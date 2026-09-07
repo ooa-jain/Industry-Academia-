@@ -31,6 +31,21 @@ def main():
     admin = app.test_client()
     member = app.test_client()
 
+    print("\n— legacy bootstrap account gets upgraded —")
+    import auth as A
+    bootstrap_email = os.environ["ADMIN_EMAIL"].strip().lower()
+    legacy = dbmod.db().admins.find_one({"email": bootstrap_email})
+    check("fresh boot seeds the bootstrap account as super admin",
+          legacy is not None and legacy.get("role") == "super_admin", legacy)
+    # Simulate an account created before "role" existed on admin docs — i.e.
+    # exactly the state of a bootstrap admin from before this feature shipped.
+    dbmod.db().admins.update_one({"_id": legacy["_id"]}, {"$unset": {"role": ""}})
+    with app.app_context():
+        A.ensure_bootstrap_admin(app)
+    upgraded = dbmod.db().admins.find_one({"_id": legacy["_id"]})
+    check("a role-less pre-existing bootstrap account is promoted to super admin on the next boot",
+          upgraded.get("role") == "super_admin", upgraded)
+
     print("\n— coordinator —")
     r = admin.post("/api/auth/login", json={"email": os.environ["ADMIN_EMAIL"], "password": "wrong"})
     check("bad password rejected", r.status_code == 401)

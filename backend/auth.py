@@ -13,11 +13,18 @@ ADMIN_ROLES = ("project_manager", "super_admin")
 # --------------------------------------------------------------- bootstrap
 def ensure_bootstrap_admin(app):
     """Seed the first account — the org's super admin — from env, once.
-    Never overwrites an existing one."""
+    Never overwrites an existing one's password or name."""
     email = app.config["ADMIN_EMAIL"].strip().lower()
     if not email:
         return
-    if db().admins.find_one({"email": email}):
+    existing = db().admins.find_one({"email": email})
+    if existing:
+        # This account predates the role system (created before "role" was a
+        # field on admin docs) — give it super admin, once, without touching
+        # anything else. A deliberate later demotion of this same account is
+        # left alone: only a doc with no role at all gets upgraded here.
+        if "role" not in existing:
+            db().admins.update_one({"_id": existing["_id"]}, {"$set": {"role": "super_admin"}})
         return
     db().admins.insert_one({
         "email": email,
