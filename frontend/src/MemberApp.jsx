@@ -113,7 +113,7 @@ function TaskRow({ t, onOpen, onStatus, readOnly }) {
       <div style={{ padding: '13px 15px', flex: 1, minWidth: 0 }}>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
-            {t.engagement ? `IAE-${String(t.engagement.seq).padStart(3, '0')} · ${t.engagement.company_name}` : 'No case file'}
+            {t.engagement ? `IAE-${String(t.engagement.seq).padStart(3, '0')} · ${t.engagement.company_name}` : 'No topic'}
           </span>
           <div className="spacer" />
           <DueTag date={t.due_date} status={t.status} />
@@ -193,7 +193,7 @@ function TaskSheet({ task, onClose, onChanged, toast }) {
             <div className="fileno">
               {task.engagement
                 ? `IAE-${String(task.engagement.seq).padStart(3, '0')} · ${task.engagement.company_name}`
-                : 'No case file'}
+                : 'No topic'}
             </div>
             <h2>{task.title}</h2>
             <Pill status={task.status} />
@@ -214,7 +214,7 @@ function TaskSheet({ task, onClose, onChanged, toast }) {
 
           {task.engagement && (
             <section>
-              <div className="sec-hd">Engagement<div className="rule" /></div>
+              <div className="sec-hd">Topic<div className="rule" /></div>
               <div className="card" style={{ padding: '12px 14px' }}>
                 <div style={{ fontWeight: 600 }}>{task.engagement.company_name}</div>
                 <div className="row" style={{ gap: 6, marginTop: 6 }}>

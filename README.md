@@ -14,7 +14,7 @@ There are three roles:
 Super admin      →  /login   (username + password) → every group, of every project manager,
                                                         plus a directory of who has registered
                                                         and logged in (/api/coordinators)
-Project manager  →  /login   (username + password) → full board, case files and people —
+Project manager  →  /login   (username + password) → full board, tasks and people —
                                                         scoped to the groups THEY created
 Member           →  /join/<token>                  → /me — only their own tasks
 ```
@@ -62,7 +62,7 @@ cd backend && ../venv/bin/python app.py     # http://localhost:5000
 ```
 
 There is **no seed or demo data** — the desk starts empty and everything in it comes from
-MongoDB. On first sign-in you are asked to create a group, then add people, case files and tasks.
+MongoDB. On first sign-in you are asked to create a group, then add people and tasks.
 
 For frontend hot reload, run `npm run dev` in `frontend/` (port 5173, proxies `/api` to 5000).
 
@@ -74,8 +74,8 @@ For frontend hot reload, run `npm run dev` in `frontend/` (port 5173, proxies `/
 2. Create a group.
 3. **People → Add person** — name + email. The private link appears once; copy it or use the
    pre-filled mail draft.
-4. **Case files → New case file** for each industry engagement.
-5. **Task board → New task**, assign it to a person, optionally tag others.
+4. **Task board → New task** — give it a topic (this creates or reuses that engagement behind the
+   scenes), assign it to a person, optionally tag others.
 
 ---
 
@@ -120,7 +120,7 @@ the reason and `GET /api/health` returns `503` with the driver's message, so
   `assignee_id == me OR me ∈ mentions OR me ∈ watchers`. They cannot read another person's tasks
   even by guessing an id.
 - **Server-side field allowlist.** A member may write only `status` and `progress`, plus comments
-  on their own tasks. Titles, assignees, due dates and case files are project-manager-only.
+  on their own tasks. Titles, assignees, due dates and topics are project-manager-only.
 - **Group ownership.** Every group carries an `owner_id`. A project manager's queries are filtered
   to groups they own — `group_guard()` in `api.py` refuses any other group with a 404, so one
   project manager cannot browse or edit another's teams. A super admin bypasses that filter

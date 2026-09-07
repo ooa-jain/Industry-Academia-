@@ -413,7 +413,7 @@ def create_engagement(gid, actor):
         return bad("Group not found.", 404)
     d = body()
     if not s(d.get("company_name")):
-        return bad("Name the partner organisation.")
+        return bad("Give the task a topic.")
     doc = {k: s(d.get(k)) for k in ENG_FIELDS}
     doc.update({
         "group_id": oid(gid),
@@ -426,7 +426,7 @@ def create_engagement(gid, actor):
     })
     r = db().engagements.insert_one(doc)
     doc["_id"] = r.inserted_id
-    log(gid, actor["name"], f"Case file opened for {doc['company_name']}",
+    log(gid, actor["name"], f"Topic opened: {doc['company_name']}",
         {"engagement_id": str(r.inserted_id)})
     return {"engagement": jsonable(doc)}, 201
 
@@ -436,7 +436,7 @@ def create_engagement(gid, actor):
 def patch_engagement(eid, actor):
     e = db().engagements.find_one({"_id": oid(eid)})
     if not e or not group_guard(actor, e["group_id"]):
-        return bad("Case file not found.", 404)
+        return bad("Topic not found.", 404)
     d = body()
     upd = {k: s(d[k]) for k in ENG_FIELDS if k in d}
     if d.get("status") in ENGAGEMENT_STATUSES:
@@ -474,7 +474,7 @@ def patch_engagement(eid, actor):
 def delete_engagement(eid, actor):
     e = db().engagements.find_one({"_id": oid(eid)})
     if not e or not group_guard(actor, e["group_id"]):
-        return bad("Case file not found.", 404)
+        return bad("Topic not found.", 404)
     tids = [t["_id"] for t in db().tasks.find({"engagement_id": e["_id"]}, {"_id": 1})]
     db().comments.delete_many({"task_id": {"$in": tids}})
     db().tasks.delete_many({"engagement_id": e["_id"]})
@@ -515,7 +515,7 @@ def list_tasks(gid, actor):
 def create_task(eid, actor):
     e = db().engagements.find_one({"_id": oid(eid)})
     if not e or not group_guard(actor, e["group_id"]):
-        return bad("Case file not found.", 404)
+        return bad("Topic not found.", 404)
     d = body()
     title = s(d.get("title"), 300)
     if not title:

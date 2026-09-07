@@ -88,7 +88,7 @@ function Login({ initialMode = 'login' }) {
         <p className="cap">
           {mode === 'login'
             ? 'Group members do not sign in here — they open the personal link you share with them.'
-            : 'Register as a new project manager to create groups, case files, and manage engagements.'}
+            : 'Register as a new project manager to create groups and tasks, and manage engagements.'}
         </p>
 
         {err && <div className="err">{err}</div>}

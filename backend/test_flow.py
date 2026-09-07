@@ -77,7 +77,7 @@ def main():
     r = admin.post(f"/api/groups/{gid}/engagements",
                    json={"company_name": "Verdant Farms", "theme": "AgriTech", "status": "Active"})
     eid = r.get_json()["engagement"]["id"]
-    check("case file created", r.status_code == 201)
+    check("topic created", r.status_code == 201)
 
     r = admin.post(f"/api/engagements/{eid}/tasks",
                    json={"title": "Map the 40 centres", "assignee_id": m1["id"],
@@ -128,7 +128,7 @@ def main():
     check("member can post an update", r.status_code == 201)
 
     r = member.post(f"/api/groups/{gid}/engagements", json={"company_name": "Sneaky Corp"})
-    check("member may NOT create case files", r.status_code == 403)
+    check("member may NOT create topics", r.status_code == 403)
 
     r = member.get(f"/api/groups/{gid}/members")
     peers = r.get_json()["members"]
@@ -161,7 +161,7 @@ def main():
     check("admin sees every task", len(r.get_json()["tasks"]) == 3)
     r = admin.get(f"/api/groups/{gid}/engagements")
     e = r.get_json()["engagements"][0]
-    check("task rollup on the case file", e["task_total"] == 3, e)
+    check("task rollup on the topic", e["task_total"] == 3, e)
     r = admin.get(f"/api/groups/{gid}/activity")
     check("activity logged", len(r.get_json()["activity"]) > 3)
 

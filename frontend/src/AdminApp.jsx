@@ -12,7 +12,6 @@ import {
 
 const NAV = [
   { k: 'tasks',   label: 'Task board',  gl: '▦' },
-  { k: 'files',   label: 'Case files',  gl: '☰' },
   { k: 'people',  label: 'People',      gl: '☺' },
   { k: 'activity',label: 'Activity',    gl: '≡' },
 ]
@@ -39,7 +38,7 @@ export default function AdminApp() {
 
   const [openTask, setOpenTask] = useState(null)
   const [openEng, setOpenEng] = useState(null)
-  const [modal, setModal] = useState(null)   // 'group' | 'member' | 'engagement' | 'task'
+  const [modal, setModal] = useState(null)   // 'group' | 'member' | 'task'
   const [filterAssignee, setFilterAssignee] = useState('')
   const [q, setQ] = useState('')
 
@@ -163,7 +162,7 @@ export default function AdminApp() {
                     onClick={() => setView(n.k)}>
               <span className="gl">{n.gl}</span>{n.label}
               <span className="kb">
-                {n.k === 'tasks' ? tasks.length : n.k === 'files' ? engagements.length
+                {n.k === 'tasks' ? tasks.length
                   : n.k === 'people' ? members.length : n.k === 'directory' ? coordinators.length : ''}
               </span>
             </button>
@@ -183,9 +182,8 @@ export default function AdminApp() {
           </div>
           {view !== 'directory' && gid && (
             <button className="btn primary" style={{ justifyContent: 'center' }}
-                    onClick={() => setModal(view === 'people' ? 'member'
-                      : view === 'files' ? 'engagement' : 'task')}>
-              ＋ {view === 'people' ? 'Add person' : view === 'files' ? 'New case file' : 'New task'}
+                    onClick={() => setModal(view === 'people' ? 'member' : 'task')}>
+              ＋ {view === 'people' ? 'Add person' : 'New task'}
             </button>
           )}
         </div>
@@ -220,10 +218,6 @@ export default function AdminApp() {
             <TaskBoard tasks={shownTasks} onMove={moveTask} onOpen={setOpenTask}
                        onAdd={() => setModal('task')} />
           )}
-          {view === 'files' && (
-            <CaseFiles engagements={engagements} onOpen={setOpenEng}
-                       onAdd={() => setModal('engagement')} />
-          )}
           {view === 'people' && (
             <People members={members} gid={gid} onAdd={() => setModal('member')}
                     onChanged={refresh} toast={toast} />
@@ -240,6 +234,10 @@ export default function AdminApp() {
       {openTask && (
         <TaskDrawer task={tasks.find(t => t.id === openTask.id) || openTask}
                     members={members} engagements={engagements}
+                    onOpenEngagement={eid => {
+                      const e = engagements.find(x => x.id === eid)
+                      if (e) { setOpenTask(null); setOpenEng(e) }
+                    }}
                     onClose={() => setOpenTask(null)} onChanged={refresh} toast={toast} />
       )}
       {openEng && (
@@ -256,12 +254,8 @@ export default function AdminApp() {
         <MemberModal gid={gid} onClose={() => setModal(null)}
                      onSaved={() => { setModal(null); refresh() }} toast={toast} />
       )}
-      {modal === 'engagement' && (
-        <EngagementModal gid={gid} onClose={() => setModal(null)}
-                         onSaved={() => { setModal(null); refresh() }} />
-      )}
       {modal === 'task' && (
-        <TaskModal engagements={engagements} members={members} onClose={() => setModal(null)}
+        <TaskModal gid={gid} engagements={engagements} members={members} onClose={() => setModal(null)}
                    onSaved={() => { setModal(null); refresh() }} />
       )}
       <Toast msg={toastMsg} />
@@ -299,7 +293,7 @@ function TaskBoard({ tasks, onMove, onOpen, onAdd }) {
 
   if (!tasks.length) {
     return <Empty title="No tasks yet">
-      <div>Open a case file, then break it into tasks and assign each one to a person.</div>
+      <div>Create a task, give it a topic, and assign it to a person.</div>
       <button className="btn primary" style={{ marginTop: 14 }} onClick={onAdd}>＋ New task</button>
     </Empty>
   }
@@ -323,7 +317,7 @@ function TaskBoard({ tasks, onMove, onOpen, onAdd }) {
                   onClick={() => onOpen(t)} tabIndex={0}
                   onKeyDown={e => { if (e.key === 'Enter') onOpen(t) }}>
                   <div className="eyebrow">
-                    {t.engagement ? `IAE-${String(t.engagement.seq).padStart(3, '0')} · ${t.engagement.company_name}` : 'No case file'}
+                    {t.engagement ? `IAE-${String(t.engagement.seq).padStart(3, '0')} · ${t.engagement.company_name}` : 'No topic'}
                   </div>
                   <h4>{t.title}</h4>
                   {t.progress > 0 && t.status !== 'Done' &&
@@ -346,42 +340,6 @@ function TaskBoard({ tasks, onMove, onOpen, onAdd }) {
           </section>
         )
       })}
-    </div>
-  )
-}
-
-/* ============================================================== case files */
-function CaseFiles({ engagements, onOpen, onAdd }) {
-  if (!engagements.length) {
-    return <Empty title="No case files">
-      <div>A case file is one industry engagement. Tasks hang off it.</div>
-      <button className="btn primary" style={{ marginTop: 14 }} onClick={onAdd}>＋ New case file</button>
-    </Empty>
-  }
-  return (
-    <div className="tablewrap">
-      <table>
-        <thead><tr>
-          <th style={{ width: 96 }}>File</th><th>Partner</th><th>Theme</th>
-          <th>University SPOC</th><th>Stage</th><th>Tasks</th><th>Target</th>
-        </tr></thead>
-        <tbody>
-          {engagements.map(e => (
-            <tr key={e.id} onClick={() => onOpen(e)} style={{ cursor: 'pointer' }}>
-              <td className="num" style={{ color: 'var(--text-3)' }}>
-                IAE-{String(e.seq).padStart(3, '0')}
-              </td>
-              <td><div style={{ fontWeight: 600 }}>{e.company_name}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{e.industry_personnel || '—'}</div></td>
-              <td>{e.theme ? <span className="tag theme">{e.theme}</span> : '—'}</td>
-              <td style={{ color: 'var(--text-2)' }}>{e.university_spoc || '—'}</td>
-              <td><Pill status={e.status} /></td>
-              <td className="num">{e.task_done}/{e.task_total}</td>
-              <td className="num">{fmtDate(e.target_date)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   )
 }
@@ -561,7 +519,7 @@ function CoordinatorDirectory({ rows, actorId, onChanged, toast }) {
 }
 
 /* ================================================================= drawers */
-function TaskDrawer({ task, members, engagements, onClose, onChanged, toast }) {
+function TaskDrawer({ task, members, engagements, onOpenEngagement, onClose, onChanged, toast }) {
   const [t, setT] = useState(task)
   const [comments, setComments] = useState([])
   const [note, setNote] = useState('')
@@ -594,9 +552,15 @@ function TaskDrawer({ task, members, engagements, onClose, onChanged, toast }) {
     <Drawer onClose={onClose}>
       <div className="dr-head">
         <div style={{ minWidth: 0 }}>
-          <div className="fileno">
-            {t.engagement ? `IAE-${String(t.engagement.seq).padStart(3, '0')} · ${t.engagement.company_name}` : 'No case file'}
-          </div>
+          {t.engagement ? (
+            <button type="button" className="fileno" style={{
+              background: 'none', border: 0, padding: 0, cursor: 'pointer', textDecoration: 'underline',
+            }} onClick={() => onOpenEngagement(t.engagement.id)}>
+              IAE-{String(t.engagement.seq).padStart(3, '0')} · {t.engagement.company_name}
+            </button>
+          ) : (
+            <div className="fileno">No topic</div>
+          )}
           <h2>{t.title}</h2>
           <Pill status={t.status} />
           {t.assignee && <span className="pill" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', marginLeft: 5 }}>
@@ -725,9 +689,9 @@ function EngagementDrawer({ eng, tasks, members, onOpenTask, onClose, onChanged,
 
       <div className="dr-body">
         <section>
-          <div className="sec-hd">Case file<div className="rule" /></div>
+          <div className="sec-hd">Topic<div className="rule" /></div>
           <div className="fgrid">
-            {[['company_name', 'Partner organisation'], ['theme', 'Major theme'],
+            {[['company_name', 'Topic'], ['theme', 'Major theme'],
               ['industry_personnel', 'Key personnel from industry'],
               ['industry_spoc', 'Industry SPOC'], ['university_spoc', 'University SPOC']].map(([k, l]) => (
               <Field key={k} label={l} wide={k === 'industry_personnel'}>
@@ -799,13 +763,13 @@ function EngagementDrawer({ eng, tasks, members, onOpenTask, onClose, onChanged,
         </section>
 
         <section>
-          <div className="sec-hd">Tasks on this file<div className="rule" />
+          <div className="sec-hd">Tasks on this topic<div className="rule" />
             <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
               {tasks.filter(t => t.status === 'Done').length}/{tasks.length} done</span>
           </div>
           <div className="col-stack">
             {tasks.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
-              No tasks yet on this case file.</div>}
+              No tasks yet on this topic.</div>}
             {tasks.map(t => (
               <div key={t.id} className="card" style={{ padding: '9px 11px', cursor: 'pointer' }}
                    onClick={() => onOpenTask(t)}>
@@ -820,7 +784,7 @@ function EngagementDrawer({ eng, tasks, members, onOpenTask, onClose, onChanged,
         </section>
 
         <div className="row">
-          <button className="btn sm danger" onClick={del}>Delete case file</button>
+          <button className="btn sm danger" onClick={del}>Delete topic</button>
           <div className="spacer" />
           <button className="btn sm ghost" onClick={onClose}>Close</button>
         </div>
@@ -924,93 +888,40 @@ function MemberModal({ gid, onClose, onSaved, toast }) {
   )
 }
 
-function EngagementModal({ gid, onClose, onSaved }) {
+function TaskModal({ gid, engagements, members, onClose, onSaved }) {
   const [f, setF] = useState({
-    company_name: '', theme: '', industry_personnel: '', industry_spoc: '',
-    university_spoc: '', status: 'Prospect', decision: 'Under Discussion',
-    start_date: new Date().toISOString().slice(0, 10), target_date: '',
-  })
-  const [err, setErr] = useState('')
-  const set = (k, v) => setF(x => ({ ...x, [k]: v }))
-  async function go() {
-    try { await api.addEngagement(gid, f); onSaved() } catch (ex) { setErr(ex.message) }
-  }
-  return (
-    <Modal title="New case file" cap="One industry engagement. Tasks are created against it."
-      onClose={onClose}
-      actions={<><button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn primary" onClick={go} disabled={!f.company_name.trim()}>Create</button></>}>
-      {err && <div className="err">{err}</div>}
-      <div className="fgrid">
-        <Field label="Partner organisation">
-          <input className="inp" autoFocus value={f.company_name}
-                 onChange={e => set('company_name', e.target.value)} />
-        </Field>
-        <Field label="Major theme">
-          <input className="inp" value={f.theme} onChange={e => set('theme', e.target.value)}
-                 placeholder="AgriTech, FinTech…" />
-        </Field>
-        <Field label="Industry SPOC">
-          <input className="inp" value={f.industry_spoc} onChange={e => set('industry_spoc', e.target.value)} />
-        </Field>
-        <Field label="University SPOC">
-          <input className="inp" value={f.university_spoc} onChange={e => set('university_spoc', e.target.value)} />
-        </Field>
-        <Field label="Stage">
-          <select className="inp" value={f.status} onChange={e => set('status', e.target.value)}>
-            {ENGAGEMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label="Decision">
-          <select className="inp" value={f.decision} onChange={e => set('decision', e.target.value)}>
-            {DECISIONS.map(s => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label="Start date">
-          <input className="inp" type="date" value={f.start_date}
-                 onChange={e => set('start_date', e.target.value)} />
-        </Field>
-        <Field label="Target date">
-          <input className="inp" type="date" value={f.target_date}
-                 onChange={e => set('target_date', e.target.value)} />
-        </Field>
-      </div>
-    </Modal>
-  )
-}
-
-function TaskModal({ engagements, members, onClose, onSaved }) {
-  const [f, setF] = useState({
-    engagement_id: engagements[0]?.id || '', title: '', detail: '', assignee_id: '',
+    topic: '', title: '', detail: '', assignee_id: '',
     status: 'To do', priority: 'Normal', due_date: '', mentions: [],
   })
   const [err, setErr] = useState('')
   const set = (k, v) => setF(x => ({ ...x, [k]: v }))
   async function go() {
+    const { topic, ...rest } = f
+    const needle = topic.trim().toLowerCase()
     try {
-      const { engagement_id, ...rest } = f
-      await api.addTask(engagement_id, rest); onSaved()
+      let engagement = engagements.find(e => e.company_name.trim().toLowerCase() === needle)
+      if (!engagement) {
+        const r = await api.addEngagement(gid, { company_name: topic.trim() })
+        engagement = r.engagement
+      }
+      await api.addTask(engagement.id, rest); onSaved()
     } catch (ex) { setErr(ex.message) }
   }
-  if (!engagements.length) {
-    return (
-      <Modal title="Create a case file first"
-        cap="Tasks belong to an engagement, so there needs to be one to hang them on."
-        onClose={onClose} actions={<button className="btn primary" onClick={onClose}>Got it</button>} />
-    )
-  }
   return (
-    <Modal title="New task" cap="Assign it to one person; tag anyone else who needs to see it."
+    <Modal title="New task" cap="Give it a topic, assign it to one person, and tag anyone else who needs to see it."
       onClose={onClose}
       actions={<><button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn primary" onClick={go} disabled={!f.title.trim()}>Create task</button></>}>
+        <button className="btn primary" onClick={go}
+                disabled={!f.title.trim() || !f.topic.trim()}>Create task</button></>}>
       {err && <div className="err">{err}</div>}
       <div className="fgrid">
-        <Field label="Case file" wide>
-          <select className="inp" value={f.engagement_id} onChange={e => set('engagement_id', e.target.value)}>
-            {engagements.map(e => <option key={e.id} value={e.id}>
-              IAE-{String(e.seq).padStart(3, '0')} · {e.company_name}</option>)}
-          </select>
+        <Field label="Topic" wide>
+          <input className="inp" list="topic-suggestions" value={f.topic}
+                 onChange={e => set('topic', e.target.value)}
+                 placeholder="Verdant Farms, AgriTech pilot…" />
+          <datalist id="topic-suggestions">
+            {engagements.map(e => <option key={e.id} value={e.company_name} />)}
+          </datalist>
         </Field>
         <Field label="Title" wide>
           <input className="inp" autoFocus value={f.title} onChange={e => set('title', e.target.value)}
