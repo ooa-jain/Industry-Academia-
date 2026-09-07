@@ -1,0 +1,24 @@
+[Unit]
+Description=IAE Engagement Desk (Flask + Gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/iae-desk/backend
+EnvironmentFile=/var/www/iae-desk/.env
+ExecStart=/var/www/iae-desk/venv/bin/gunicorn \
+    --workers 3 --threads 2 --timeout 60 \
+    --bind 127.0.0.1:8130 \
+    --access-logfile - --error-logfile - \
+    wsgi:app
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
