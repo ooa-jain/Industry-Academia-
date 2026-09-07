@@ -39,7 +39,7 @@ function Login({ initialMode = 'login' }) {
   }, [initialMode])
 
   useEffect(() => {
-    if (actor?.role === 'admin') nav('/admin', { replace: true })
+    if (actor?.role === 'project_manager' || actor?.role === 'super_admin') nav('/admin', { replace: true })
     if (actor?.role === 'member') nav('/me', { replace: true })
   }, [actor, nav])
 
@@ -84,11 +84,11 @@ function Login({ initialMode = 'login' }) {
           </button>
         </div>
 
-        <h1>{mode === 'login' ? 'Coordinator sign-in' : 'New coordinator register'}</h1>
+        <h1>{mode === 'login' ? 'Project manager sign-in' : 'New project manager register'}</h1>
         <p className="cap">
           {mode === 'login'
             ? 'Group members do not sign in here — they open the personal link you share with them.'
-            : 'Register as a new coordinator to create groups, case files, and manage engagements.'}
+            : 'Register as a new project manager to create groups, case files, and manage engagements.'}
         </p>
 
         {err && <div className="err">{err}</div>}
@@ -142,7 +142,7 @@ function Login({ initialMode = 'login' }) {
             <>
               New user?{' '}
               <button type="button" className="auth-link" onClick={() => switchMode('register')}>
-                Register as coordinator
+                Register as project manager
               </button>
             </>
           ) : (
@@ -193,12 +193,14 @@ function Join() {
 }
 
 /* ----------------------------------------------------------------- routing */
-function Gate({ role, children }) {
+const ADMIN_ROLES = ['project_manager', 'super_admin']
+
+function Gate({ roles, children }) {
   const { actor } = useAuth()
   if (actor === undefined) return <Splash />
   if (!actor) return <Navigate to="/login" replace />
-  if (role && actor.role !== role) {
-    return <Navigate to={actor.role === 'admin' ? '/admin' : '/me'} replace />
+  if (roles && !roles.includes(actor.role)) {
+    return <Navigate to={ADMIN_ROLES.includes(actor.role) ? '/admin' : '/me'} replace />
   }
   return children
 }
@@ -207,7 +209,7 @@ function Home() {
   const { actor } = useAuth()
   if (actor === undefined) return <Splash />
   if (!actor) return <Navigate to="/login" replace />
-  return <Navigate to={actor.role === 'admin' ? '/admin' : '/me'} replace />
+  return <Navigate to={ADMIN_ROLES.includes(actor.role) ? '/admin' : '/me'} replace />
 }
 
 function App() {
@@ -219,8 +221,8 @@ function App() {
           <Route path="/login" element={<Login initialMode="login" />} />
           <Route path="/register" element={<Login initialMode="register" />} />
           <Route path="/join/:token" element={<Join />} />
-          <Route path="/admin/*" element={<Gate role="admin"><AdminApp /></Gate>} />
-          <Route path="/me" element={<Gate role="member"><MemberApp /></Gate>} />
+          <Route path="/admin/*" element={<Gate roles={ADMIN_ROLES}><AdminApp /></Gate>} />
+          <Route path="/me" element={<Gate roles={['member']}><MemberApp /></Gate>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

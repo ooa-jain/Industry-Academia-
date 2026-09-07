@@ -36,6 +36,10 @@ export const api = {
   patchGroup:  (id, b) => call('PATCH', `/groups/${id}`, b),
   deleteGroup: id => call('DELETE', `/groups/${id}`),
 
+  // coordinators (super admin only)
+  coordinators:      () => call('GET', '/coordinators'),
+  patchCoordinator:  (id, b) => call('PATCH', `/coordinators/${id}`, b),
+
   // members
   members:    gid => call('GET', `/groups/${gid}/members`),
   addMember:  (gid, b) => call('POST', `/groups/${gid}/members`, b),

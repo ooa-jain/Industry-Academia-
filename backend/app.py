@@ -3,7 +3,7 @@ import os
 from flask import Flask, jsonify, send_from_directory
 
 from api import api
-from auth import ensure_bootstrap_admin
+from auth import backfill_group_owners, ensure_bootstrap_admin
 from config import Config
 from db import init_db
 
@@ -16,8 +16,9 @@ def create_app():
     with app.app_context():
         try:
             ensure_bootstrap_admin(app)
+            backfill_group_owners()
         except Exception as e:
-            app.logger.error("Could not seed the coordinator account: %s", e)
+            app.logger.error("Could not seed the super admin account: %s", e)
 
     app.register_blueprint(api, url_prefix="/api")
 
