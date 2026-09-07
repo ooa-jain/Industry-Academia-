@@ -27,13 +27,20 @@ def s(v, limit=4000):
     return ("" if v is None else str(v)).strip()[:limit]
 
 
+def is_pm(actor):
+    """Project manager or super admin — anyone above a group member."""
+    return actor["role"] in ("project_manager", "super_admin")
+
+
 def group_guard(actor, gid):
     """Return the group doc if the actor may touch it, else None."""
     g = db().groups.find_one({"_id": oid(gid)})
     if not g:
         return None
-    if actor["role"] == "admin":
+    if actor["role"] == "super_admin":
         return g
+    if actor["role"] == "project_manager":
+        return g if str(g.get("owner_id")) == actor["id"] else None
     if actor.get("group_id") == str(g["_id"]):
         return g
     return None
@@ -105,6 +112,8 @@ def login():
     admin = db().admins.find_one({"email": email})
     if not admin or not A.verify_password(admin, d.get("password")):
         return bad("That email and password do not match.", 401)
+    if not admin.get("active", True):
+        return bad("This account has been deactivated.", 403)
     A.login_admin(admin)
     return {"actor": A.current_actor()}
 
@@ -131,7 +140,12 @@ def register():
         "email": email,
         "name": name,
         "password_hash": A.hash_password(password),
+        # Self-registration always yields a project manager — a super admin
+        # can only be created by promoting an existing account.
+        "role": "project_manager",
+        "active": True,
         "created_at": now(),
+        "last_login": None,
     }
     try:
         r = db().admins.insert_one(doc)
@@ -171,7 +185,12 @@ def me():
 @api.get("/groups")
 @A.require_auth
 def list_groups(actor):
-    q = {} if actor["role"] == "admin" else {"_id": oid(actor["group_id"])}
+    if actor["role"] == "super_admin":
+        q = {}
+    elif actor["role"] == "project_manager":
+        q = {"owner_id": oid(actor["id"])}
+    else:
+        q = {"_id": oid(actor["group_id"])}
     rows = list(db().groups.find(q).sort("created_at", -1))
     for g in rows:
         g["member_count"] = db().members.count_documents({"group_id": g["_id"], "active": True})
@@ -187,7 +206,7 @@ def create_group(actor):
     if not name:
         return bad("Give the group a name.")
     doc = {"name": name, "description": s(d.get("description"), 500),
-           "created_at": now(), "created_by": actor["email"]}
+           "created_at": now(), "created_by": actor["email"], "owner_id": oid(actor["id"])}
     r = db().groups.insert_one(doc)
     doc["_id"] = r.inserted_id
     log(r.inserted_id, actor["name"], f"Group '{name}' created")
@@ -218,6 +237,49 @@ def delete_group(gid, actor):
     return {"ok": True}
 
 
+# ------------------------------------------------------- coordinators (super admin)
+@api.get("/coordinators")
+@A.require_super_admin
+def list_coordinators(actor):
+    """Every project manager (and super admin) account, with who's logged in
+    and what they run — the super admin's view over the whole desk."""
+    rows = list(db().admins.find().sort("created_at", 1))
+    out = []
+    for a in rows:
+        d = jsonable(a)
+        d.pop("password_hash", None)
+        gids = db().groups.distinct("_id", {"owner_id": a["_id"]})
+        d["group_count"] = len(gids)
+        d["member_count"] = db().members.count_documents({"group_id": {"$in": gids}})
+        d["is_self"] = str(a["_id"]) == actor["id"]
+        out.append(d)
+    return {"coordinators": out}
+
+
+@api.patch("/coordinators/<aid>")
+@A.require_super_admin
+def patch_coordinator(aid, actor):
+    """Promote/demote a project manager, or pause their account."""
+    a = db().admins.find_one({"_id": oid(aid)})
+    if not a:
+        return bad("Account not found.", 404)
+    d = body()
+    upd = {}
+    if d.get("role") in ("project_manager", "super_admin"):
+        if str(a["_id"]) == actor["id"] and d["role"] != "super_admin":
+            return bad("You cannot demote your own account.")
+        upd["role"] = d["role"]
+    if "active" in d:
+        if str(a["_id"]) == actor["id"] and not d["active"]:
+            return bad("You cannot deactivate your own account.")
+        upd["active"] = bool(d["active"])
+    if upd:
+        db().admins.update_one({"_id": a["_id"]}, {"$set": upd})
+    out = jsonable(db().admins.find_one({"_id": a["_id"]}))
+    out.pop("password_hash", None)
+    return {"coordinator": out}
+
+
 # ------------------------------------------------------------------- members
 @api.get("/groups/<gid>/members")
 @A.require_auth
@@ -231,7 +293,7 @@ def list_members(gid, actor):
         d.pop("token_hash", None)
         d["open_tasks"] = db().tasks.count_documents(
             {"assignee_id": m["_id"], "status": {"$ne": "Done"}})
-        if actor["role"] != "admin":
+        if not is_pm(actor):
             d.pop("token_tail", None)
         out.append(d)
     return {"members": out}
@@ -517,7 +579,7 @@ def patch_task(tid, actor):
             upd["progress"] = max(0, min(100, int(d["progress"])))
         except (TypeError, ValueError):
             pass
-    if actor["role"] == "admin":
+    if is_pm(actor):
         for k in ("title", "detail", "due_date"):
             if k in d:
                 upd[k] = s(d[k], 300 if k == "title" else 4000)

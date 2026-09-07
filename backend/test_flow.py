@@ -150,6 +150,54 @@ def main():
     r = admin.get(f"/api/groups/{gid}/activity")
     check("activity logged", len(r.get_json()["activity"]) > 3)
 
+    print("\n— roles: project manager vs. super admin —")
+    r = admin.get("/api/auth/me")
+    check("bootstrap account is the super admin", r.get_json()["actor"]["role"] == "super_admin")
+
+    pm1 = app.test_client()
+    r = pm1.post("/api/auth/register",
+                 json={"name": "Priya PM", "email": "priya@example.edu", "password": "secretpw"})
+    check("self-registration yields a project manager",
+          r.status_code == 201 and r.get_json()["actor"]["role"] == "project_manager")
+
+    pm2 = app.test_client()
+    r = pm2.post("/api/auth/register",
+                 json={"name": "Rahul PM", "email": "rahul.pm@example.edu", "password": "secretpw"})
+    check("second project manager registered", r.status_code == 201)
+
+    r = pm1.post("/api/groups", json={"name": "Priya's Cell"})
+    pm1_gid = r.get_json()["group"]["id"]
+    r = pm2.post("/api/groups", json={"name": "Rahul's Cell"})
+    pm2_gid = r.get_json()["group"]["id"]
+
+    r = pm1.get("/api/groups")
+    check("a project manager sees only their own group",
+          {g["id"] for g in r.get_json()["groups"]} == {pm1_gid}, r.get_json())
+
+    r = pm1.get(f"/api/groups/{pm2_gid}/members")
+    check("a project manager cannot reach another PM's group", r.status_code == 404)
+
+    r = admin.get("/api/groups")
+    all_gids = {g["id"] for g in r.get_json()["groups"]}
+    check("super admin sees every group, across every project manager",
+          {gid, pm1_gid, pm2_gid} <= all_gids)
+
+    r = pm1.get("/api/coordinators")
+    check("a project manager may not open the coordinator directory", r.status_code == 403)
+
+    r = admin.get("/api/coordinators")
+    coords = {c["email"]: c for c in r.get_json()["coordinators"]}
+    check("super admin sees who has logged in and their group counts",
+          coords["priya@example.edu"]["last_login"] is not None
+          and coords["priya@example.edu"]["group_count"] == 1
+          and coords["rahul.pm@example.edu"]["group_count"] == 1, coords)
+
+    r = admin.patch(f"/api/coordinators/{coords['priya@example.edu']['id']}",
+                     json={"active": False})
+    check("super admin can pause a project manager's account", r.status_code == 200)
+    r = pm1.post("/api/auth/login", json={"email": "priya@example.edu", "password": "secretpw"})
+    check("a paused account can no longer sign in", r.status_code == 403)
+
     print("\n— signed out —")
     anon = app.test_client()
     check("anonymous is blocked", anon.get(f"/api/groups/{gid}/tasks").status_code == 401)

@@ -16,21 +16,26 @@ const NAV = [
   { k: 'people',  label: 'People',      gl: '☺' },
   { k: 'activity',label: 'Activity',    gl: '≡' },
 ]
+const DIRECTORY_NAV = { k: 'directory', label: 'Project managers', gl: '⌘' }
 
 export default function AdminApp() {
   const { actor, setActor } = useAuth()
   const nav = useNavigate()
   const toggleTheme = useTheme()
   const [toastMsg, toast] = useToast()
+  const isSuperAdmin = actor?.role === 'super_admin'
 
   const [groups, setGroups] = useState([])
   const [gid, setGid] = useState(() => localStorage.getItem('desk-gid') || '')
-  const [view, setView] = useState('tasks')
+  const [view, setView] = useState(() => (actor?.role === 'super_admin' ? 'directory' : 'tasks'))
 
   const [members, setMembers] = useState([])
   const [engagements, setEngagements] = useState([])
   const [tasks, setTasks] = useState([])
   const [activity, setActivity] = useState([])
+  const [coordinators, setCoordinators] = useState([])
+
+  const navItems = useMemo(() => (isSuperAdmin ? [...NAV, DIRECTORY_NAV] : NAV), [isSuperAdmin])
 
   const [openTask, setOpenTask] = useState(null)
   const [openEng, setOpenEng] = useState(null)
@@ -57,11 +62,19 @@ export default function AdminApp() {
     setTasks(t.tasks); setActivity(a.activity)
   }, [])
 
+  const loadCoordinators = useCallback(async () => {
+    const r = await api.coordinators()
+    setCoordinators(r.coordinators)
+  }, [])
+
   useEffect(() => { loadGroups().catch(() => {}) }, [])            // eslint-disable-line
   useEffect(() => {
     if (gid) localStorage.setItem('desk-gid', gid)
     loadGroupData(gid).catch(ex => toast(ex.message))
   }, [gid, loadGroupData])                                        // eslint-disable-line
+  useEffect(() => {
+    if (isSuperAdmin) loadCoordinators().catch(ex => toast(ex.message))
+  }, [isSuperAdmin, loadCoordinators])                             // eslint-disable-line
 
   const refresh = () => loadGroupData(gid).catch(ex => toast(ex.message))
 
@@ -101,7 +114,7 @@ export default function AdminApp() {
   }
 
   /* ------------------------------------------------------------------ view */
-  if (!groups.length) {
+  if (!groups.length && !isSuperAdmin) {
     return (
       <>
         <div className="centre">
@@ -130,7 +143,7 @@ export default function AdminApp() {
     <div className="app">
       {/* ------------------------------------------------------------ rail */}
       <aside className="rail">
-        <Mark title="Engagement Desk" sub="Coordinator" />
+        <Mark title="Engagement Desk" sub={isSuperAdmin ? 'Super Admin' : 'Project Manager'} />
 
         <div className="rail-sec">
           <div className="rail-hd">Group</div>
@@ -145,13 +158,13 @@ export default function AdminApp() {
 
         <nav className="rail-sec">
           <div className="rail-hd">Views</div>
-          {NAV.map(n => (
+          {navItems.map(n => (
             <button key={n.k} className={'navbtn' + (view === n.k ? ' on' : '')}
                     onClick={() => setView(n.k)}>
               <span className="gl">{n.gl}</span>{n.label}
               <span className="kb">
                 {n.k === 'tasks' ? tasks.length : n.k === 'files' ? engagements.length
-                  : n.k === 'people' ? members.length : ''}
+                  : n.k === 'people' ? members.length : n.k === 'directory' ? coordinators.length : ''}
               </span>
             </button>
           ))}
@@ -168,11 +181,13 @@ export default function AdminApp() {
             <div className="n">{actor?.name}</div>
             <div className="e">{actor?.email}</div>
           </div>
-          <button className="btn primary" style={{ justifyContent: 'center' }}
-                  onClick={() => setModal(view === 'people' ? 'member'
-                    : view === 'files' ? 'engagement' : 'task')}>
-            ＋ {view === 'people' ? 'Add person' : view === 'files' ? 'New case file' : 'New task'}
-          </button>
+          {view !== 'directory' && gid && (
+            <button className="btn primary" style={{ justifyContent: 'center' }}
+                    onClick={() => setModal(view === 'people' ? 'member'
+                      : view === 'files' ? 'engagement' : 'task')}>
+              ＋ {view === 'people' ? 'Add person' : view === 'files' ? 'New case file' : 'New task'}
+            </button>
+          )}
         </div>
       </aside>
 
@@ -180,8 +195,8 @@ export default function AdminApp() {
       <div className="main">
         <header className="topbar">
           <div>
-            <h1>{NAV.find(n => n.k === view)?.label}</h1>
-            <div className="sub">{group?.name}</div>
+            <h1>{navItems.find(n => n.k === view)?.label}</h1>
+            <div className="sub">{view === 'directory' ? 'Every project manager on the desk' : group?.name}</div>
           </div>
           <div className="spacer" />
           {view === 'tasks' && (
@@ -214,6 +229,10 @@ export default function AdminApp() {
                     onChanged={refresh} toast={toast} />
           )}
           {view === 'activity' && <ActivityLog rows={activity} />}
+          {view === 'directory' && (
+            <CoordinatorDirectory rows={coordinators} actorId={actor?.id}
+                                   onChanged={loadCoordinators} toast={toast} />
+          )}
         </div>
       </div>
 
@@ -451,7 +470,7 @@ function ActivityLog({ rows }) {
   return (
     <div className="panel" style={{ maxWidth: 720 }}>
       <h3>Recent activity</h3>
-      <div className="cap">Newest first. Everything members and coordinators do lands here.</div>
+      <div className="cap">Newest first. Everything members and project managers do lands here.</div>
       <div className="log">
         {rows.map(r => (
           <div key={r.id} className="log-item hi">
@@ -461,6 +480,83 @@ function ActivityLog({ rows }) {
         ))}
       </div>
     </div>
+  )
+}
+
+/* ========================================= coordinator directory (super admin) */
+function CoordinatorDirectory({ rows, actorId, onChanged, toast }) {
+  async function setRole(row, role) {
+    try {
+      await api.patchCoordinator(row.id, { role })
+      onChanged()
+      toast(`${row.name} is now ${role === 'super_admin' ? 'a super admin' : 'a project manager'}`)
+    } catch (ex) { toast(ex.message) }
+  }
+  async function setActive(row, active) {
+    if (!active && !confirm(`Pause ${row.name}'s account? They will not be able to sign in until resumed.`)) return
+    try {
+      await api.patchCoordinator(row.id, { active })
+      onChanged()
+      toast(active ? 'Account resumed' : 'Account paused')
+    } catch (ex) { toast(ex.message) }
+  }
+
+  if (!rows.length) {
+    return <Empty title="No project managers yet">Accounts appear here as people register.</Empty>
+  }
+
+  return (
+    <>
+      <div className="note" style={{ marginBottom: 16 }}>
+        Every project manager who has registered, and what they run. Promote someone to super admin
+        to give them this same view over the whole desk; pause an account to stop it signing in.
+      </div>
+      <div className="tablewrap">
+        <table>
+          <thead><tr>
+            <th>Name</th><th>Role</th><th>Groups</th><th>People</th>
+            <th>Registered</th><th>Last login</th><th></th>
+          </tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id}>
+                <td>
+                  <div style={{ fontWeight: 600 }}>
+                    {r.name} {r.id === actorId && <span className="tag">you</span>}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{r.email}</div>
+                </td>
+                <td>
+                  <span className="tag" style={r.role === 'super_admin'
+                    ? { background: 'var(--accent-bg)', color: 'var(--accent)' } : undefined}>
+                    {r.role === 'super_admin' ? 'Super admin' : 'Project manager'}
+                  </span>
+                  {r.active === false && <span className="tag" style={{ marginLeft: 4 }}>paused</span>}
+                </td>
+                <td className="num">{r.group_count}</td>
+                <td className="num">{r.member_count}</td>
+                <td>{fmtDate(r.created_at)}</td>
+                <td>{r.last_login ? fmtWhen(r.last_login) : 'never'}</td>
+                <td>
+                  {r.id !== actorId && (
+                    <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="btn sm ghost"
+                              onClick={() => setRole(r, r.role === 'super_admin' ? 'project_manager' : 'super_admin')}>
+                        {r.role === 'super_admin' ? 'Demote' : 'Promote'}
+                      </button>
+                      <button className={'btn sm' + (r.active === false ? '' : ' ghost')}
+                              onClick={() => setActive(r, r.active === false)}>
+                        {r.active === false ? 'Resume' : 'Pause'}
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 
